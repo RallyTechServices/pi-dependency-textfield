@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>pi-dependency-textfield</title>
+    <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
+    <!--  Build Date: Thu Apr 10 2014 15:20:24 GMT-0600 (MDT) -->
+    
+    <script type="text/javascript">
+        var APP_BUILD_DATE = "Thu Apr 10 2014 15:20:24 GMT-0600 (MDT)";
+        var CHECKSUM = 8303196183;
+    </script>
+    
+    <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+             
+/**
+ * A link that pops up a version dialog box
+ */
+
+Ext.define('Rally.technicalservices.InfoLink',{
+    extend: 'Ext.Component',
+    alias: 'widget.tsinfolink',
+    
+    /**
+     * @cfg {String} informationHtml
+     * Additional text to be displayed on the popup dialog (for exmaple,
+     * to add a description of the app's use or functionality)
+     */
+    informationHtml: null,
+    
+    /**
+     * 
+     * cfg {String} title
+     * The title for the dialog box
+     */
+     title: "Build Information",
+    
+    renderTpl: "<div id='{id}-infolinkWrap' class='tsinfolink'>--</div>",
+
+    initComponent: function() {
+        this.callParent(arguments);
+       
+    },
+    
+    onRender: function() {
+        this.callParent(arguments);
+        this.mon(this.el,'click',this.onClick,this);
+    },
+    _generateChecksum: function(string){
+        var chk = 0x12345678,
+            i;
+        string = string.replace(/var CHECKSUM = .*;/,"");
+        
+        for (i = 0; i < string.length; i++) {
+            chk += (string.charCodeAt(i) * i);
+        }
+    
+        return chk;
+    },
+    _checkChecksum: function(container) {
+        var me = this;
+        Ext.Ajax.request({
+            url: document.URL,
+            params: {
+                id: 1
+            },
+            success: function (response) {
+                text = response.responseText;
+                if ( CHECKSUM ) {
+                    if ( CHECKSUM !== me._generateChecksum(text) ) {
+                        console.log("Checksums don't match!");
+                        if ( me.dialog ) {
+                            me.dialog.add({xtype:'container',html:'Checksums do not match'});
+                        }
+                    }
+                }
+            }
+        });
+    },
+    onClick: function(e) {
+        var me = this;
+        this._checkChecksum(this);
+        
+        var dialog_items = [];
+        
+        if ( this.informationHtml ) {
+            dialog_items.push({
+                xtype:'container',
+                html: this.informationHtml
+            });
+        }
+                
+        dialog_items.push({
+            xtype:'container',
+            html:"This app was created by the Rally Technical Services Team."
+        });
+        
+        if ( APP_BUILD_DATE ) {
+            dialog_items.push({
+                xtype:'container',
+                html:'Build date/time: ' + APP_BUILD_DATE
+            });
+        }
+        
+        if (this.dialog){this.dialog.destroy();}
+        this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
+            defaults: { padding: 5, margin: 5 },
+            closable: true,
+            draggable: true,
+            title: me.title,
+            items: dialog_items
+        });
+        this.dialog.show();
+    }
+});
+
+/*
+ */
+Ext.define('Rally.technicalservices.Logger',{
+    constructor: function(config){
+        Ext.apply(this,config);
+    },
+    log: function(args){
+        var timestamp = "[ " + Ext.util.Format.date(new Date(), "Y-m-d H:i:s.u") + " ]";
+        //var output_args = arguments;
+        //output_args.unshift( [ "[ " + timestamp + " ]" ] );
+        //output_args = Ext.Array.push(output_args,arguments);
+        
+        var output_args = [];
+        output_args = Ext.Array.push(output_args,[timestamp]);
+        output_args = Ext.Array.push(output_args, Ext.Array.slice(arguments,0));
+
+        window.console && console.log.apply(console,output_args);
+    }
+
+});
+
+
+Ext.define('CustomApp', {
+    extend: 'Rally.app.App',
+    componentCls: 'app',
+    logger: new Rally.technicalservices.Logger(),
+    items:
+        [
+         {xtype:'container',itemId:'display_box', style:{padding: '10px'}}, 
+         {xtype:'container',itemId:'portfolio_item_box', layout: {type: 'hbox'}, style:{padding: '10px'}},
+         {xtype:'container',itemId:'relatives_box',flex:1, layout:{type: 'hbox'}, style: {padding: '10px'},
+          	items:
+          	[
+          	    {
+          	    	xtype: 'container', 
+          	    	itemId: 'predecessor_box', 
+          	    	layout: {type: 'vbox'},
+          	    	flex: 1
+          	    },
+          	    {
+          	    	xtype: 'container', 
+          	    	itemId: 'successor_box', 
+          	    	layout: {type: 'vbox'},
+          	    	flex: 1
+          	    }       	       
+          	]
+          },
+          {xtype:'container',itemId: 'save_cancel_box', layout: {type: 'hbox'}, style: {padding: '10px',margin: '10px'}}
+         ],
+
+     selected_portfolio_item: null,  //Record for the selected PI
+     portfolio_item_predecessors: null, //Records for the selected PI Predecessors
+     portfolio_item_successors: null, //Records for the selected PI Successors
+     config: {
+    	defaultSettings: {
+    	    pi_predecessor_field_name: 'c_piPredecessor',
+    	    pi_successor_field_name: 'c_piSuccessor'   		
+    	}
+       
+    },
+
+    launch: function() {
+    	
+    	if (typeof(this.getAppId()) == 'undefined' ) {
+            // not inside Rally
+    		this.logger.log ('Usage is external.');
+    		this._showExternalSettingsDialog(this.getSettingsFields());
+        } else {
+            this.logger.log ('Usage is internal.'); 
+        	//this._getData();
+        }
+    	
+    	//Build the UI 
+    	var me = this;
+    	this.down('#portfolio_item_box').add(
+    	{
+    		xtype: 'rallybutton',
+    		text: 'Select...',
+    		scope: this,
+    		handler: function(){
+    			me._selectPortfolioItems();
+    		}
+    	});
+	
+    },
+    
+    _selectPortfolioItems: function(){
+    	var me = this;
+
+    	Ext.create('Rally.ui.dialog.ChooserDialog',
+    			{
+    				artifactTypes:['portfolioitem'],
+    				autoShow: true,
+    				title: 'Choose a Portfolio Item',
+    				multliple: false,
+    				modal: true,
+    				listeners: {
+    					artifactChosen: function (selectedRecords){
+    						if (selectedRecords == undefined)
+    							{
+    							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
+    							return;
+    							}
+    						me.selected_portfolio_item = selectedRecords;
+    						me._buildUIAfterPortfolioItemSelected(selectedRecords);
+
+
+    					}
+    				},
+    				scope: this
+    			}
+    			);
+   			
+
+    },
+    _buildUIAfterPortfolioItemSelected: function(selected_records){
+		//This function clears out the existing portfolio item, resets the buttons
+    	var me = this; 
+    	if (me.down('portfolio_item_id'))
+    		{
+    		me.down('portfolio_item_id').destroy();
+    		}
+
+
+    	me.down('#portfolio_item_box').add(
+		    	{
+		    		xtype: 'rallytextfield',
+		    		id: 'portfolio_item_id',
+		    		value: me._getPortfolioItemDisplayText(selected_records),
+		    	});
+    	
+    	//Add buttons 
+    	
+    	me._addPredecessorSelector ();
+    	me._addSuccessorSelector ();
+   	
+    },
+    _addPredecessorSelector: function(){
+    	var me = this;
+    	this.down('#predecessor_box').removeAll();
+    	//Add the label
+    	this.down('#predecessor_box').add({
+    		xtype: 'label',
+    		text: 'Predecessors'
+    	});
+    	
+    	
+    	//Add the records (if they exist) 
+    	
+    	
+    	//Add the button
+    	this.down('#predecessor_box').add({
+    			xtype: 'rallybutton',
+    			text: '+Add',
+    			handler: function(){
+        			me._choosePredecessors();
+        		}
+    	});
+
+    },
+    _addSuccessorSelector: function(){
+    	var me = this;
+    	this.down('#successor_box').removeAll();
+    	
+    	//Add the label
+    	this.down('#successor_box').add({
+    		xtype: 'label',
+    		text: 'Successors'
+    	});
+
+    	
+    	
+    	//Add the button
+    	this.down('#successor_box').add({
+    			xtype: 'rallybutton',
+    			text: '+Add',
+    			handler: function(){
+        			me._chooseSuccessors();
+        		}
+    	});
+    },
+    _getPortfolioItemDisplayText: function(pi_record){
+    	if (pi_record == null || pi_record == undefined){
+    		return 'Not Defined';
+    	}
+    	return pi_record.data.FormattedID + ' - ' + pi_record.data.Name;
+    },
+    _choosePredecessors: function(){
+    	var me=this;
+    	Ext.create('Rally.ui.dialog.ChooserDialog',
+    			{
+    				artifactTypes:['portfolioitem'],
+    				autoShow: true,
+    				title: 'Choose predecessor Portfolio Items',
+    			    multiple: true,
+    				listeners: {
+    					artifactChosen: function (selectedRecords){
+    						if (selectedRecords == undefined)
+    							{
+    							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
+    							return;
+    							}
+    						me._addPredecessors(selectedRecords);
+   					}
+    				},
+    				scope: this
+    			}
+    			);
+    },
+    _chooseSuccessors: function(){
+    	var me=this;
+    	Ext.create('Rally.ui.dialog.ChooserDialog',
+    			{
+    				artifactTypes:['portfolioitem'],
+    				autoShow: true,
+    				title: 'Choose Successor Portfolio Items',
+    			    multiple: true,
+    				listeners: {
+    					artifactChosen: function (selectedRecords){
+    						if (selectedRecords == undefined)
+    							{
+    							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
+    							return;
+    							}
+    						me._addSuccessors(selectedRecords);
+    					}
+    				},
+    				scope: this
+    			}
+    			);
+    },
+    _addPredecessors: function(selected_records){
+    	//This function assumes that selected_records is an array of data records of the portfolio items model
+    	var me= this;
+    	console.log(selected_records);
+    	var predecessor_content = ''
+        	this.down('#predecessor_box').add({
+        		xtype: 'container',
+        		text: 'Predecessors'
+        	});
+		
+    		
+    		for (var i=0; i < selected_records.length; i++){
+    	   	 var predecessor_content = '<a href="' + Rally.nav.Manager.getDetailUrl(selected_records[i]) + '">' + me._getPortfolioItemDisplayText(selected_records[i]) + '</a><br>';
+    	   	 me.down('#predecessor_box').add ({
+    	   		 xtype: 'container',
+    	   		 html: predecessor_content
+ 	   			 
+    	   	 });  
+    	   	 
+    	}
+    	
+
+    },
+
+    _addSuccessors: function(selected_records){
+    	//This function assumes that selected_records is an array of data records of the portfolio items model
+    	var me= this;
+    	console.log(selected_records);
+    	var successor_content = ''
+        	this.down('#successor_box').add({
+        		xtype: 'container',
+        		text: 'Successors'
+        	});
+		
+    		
+    		for (var i=0; i < selected_records.length; i++){
+    	   	 var predecessor_content = '<a id="' + selected_records[i].ObjectID + '" href="' + Rally.nav.Manager.getDetailUrl(selected_records[i]) + '">' + me._getPortfolioItemDisplayText(selected_records[i]) + '</a><br>';
+    	   	 me.down('#successor_box').add ({
+    	   		 xtype: 'container',
+    	   		 html: predecessor_content
+ 	   			 
+    	   	 });  
+    	   	 
+    	}
+    	
+
+    },
+    
+    
+ /*
+  * 
+  * Settings related code below here 
+  * 
+  */
+//Overrides getSettingsFields in Rally.app.App
+getSettingsFields: function() {
+
+    var _chooseOnlyTextFields = function(field){
+        var should_show_field = true;
+        if ( field.hidden ) {
+            should_show_field = false;
+        }
+        if ( field.attributeDefinition ) {
+            var type = field.attributeDefinition.AttributeType;
+            if ( type != "TEXT"  ) {
+                should_show_field = false;
+            }
+        } else {
+            should_show_field = false;
+        }
+        return should_show_field;
+    };
+	
+    return [{
+        name: 'pi_predecessor_field_name',
+        xtype: 'rallyfieldcombobox',
+        model: 'PortfolioItem',
+        fieldLabel: 'Portfolio Item Predecessor Field',
+        width: 300,
+        labelWidth: 200,
+        _isNotHidden: _chooseOnlyTextFields,
+        value: this.getSetting('pi_predecessor_field_name'),
+        readyEvent: 'ready' //event fired to signify readiness
+    },
+    {
+        name: 'pi_successor_field_name',
+        xtype: 'rallyfieldcombobox',
+        model: 'PortfolioItem',
+        fieldLabel: 'Portfolio Item Successor Field',
+        _isNotHidden: _chooseOnlyTextFields,
+        width: 300,
+        labelWidth: 200,
+        value: this.getSetting('pi_successor_field_name'),
+        readyEvent: 'ready' //event fired to signify readiness
+    }];
+},
+// ONLY FOR RUNNING EXTERNALLY
+_showExternalSettingsDialog: function(fields){
+	var me = this;
+    if ( this.settings_dialog ) { this.settings_dialog.destroy(); }
+    this.settings_dialog = Ext.create('Rally.ui.dialog.Dialog', {
+         autoShow: false,
+         draggable: true,
+         width: 400,
+         title: 'Settings',
+         buttons: [{ 
+            text: 'OK',
+            handler: function(cmp){
+                var settings = {};
+                Ext.Array.each(fields,function(field){
+                	settings[field.name] = cmp.up('rallydialog').down('[name="' + field.name + '"]').getValue();
+                });
+                me.settings = settings;
+                console.log (me.settings);
+                cmp.up('rallydialog').destroy();
+                //me._getData();
+            }
+        }],
+         items: [
+            {xtype:'container',html: "&nbsp;", padding: 5, margin: 5},
+            {xtype:'container',itemId:'field_box', padding: 5, margin: 5}]
+     });
+     Ext.Array.each(fields,function(field){
+        me.settings_dialog.down('#field_box').add(field);
+     });
+     this.settings_dialog.show();
+},    
+/*
+ * Override so that the settings box fits (shows the buttons)
+ */
+showSettings: function(options) {
+    this._appSettings = Ext.create('Rally.app.AppSettings', {
+        fields: this.getSettingsFields(),
+        settings: this.getSettings(),
+        defaultSettings: this.getDefaultSettings(),
+        context: this.getContext(),
+        settingsScope: this.settingsScope
+    });
+    this.doLayout();
+
+    this._appSettings.on('cancel', this._hideSettings, this);
+    this._appSettings.on('save', this._onSettingsSaved, this);
+
+    this.hide();
+    this.up().add(this._appSettings);
+
+    return this._appSettings;
+}
+});
+
+            
+               Rally.launchApp('CustomApp', {
+                   name: 'pi-dependency-textfield'
+               });
+        });
+    </script>
+    
+    <style type="text/css">
+
+.app {
+}
+.tsinfolink {
+    position:absolute;
+    right:0px;
+    width:5%;
+}
+    </style>
+
+</head>
+<body></body>
+</html>
