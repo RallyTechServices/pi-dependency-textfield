@@ -38,9 +38,12 @@ Ext.define('CustomApp', {
     	if (typeof(this.getAppId()) == 'undefined' ) {
     		this.logger.log ('App is not running from within Rally.');
     		this._showExternalSettingsDialog(this.getSettingsFields());
+        	this.logger.log('WORKSPACE',this.getContext().getWorkspace().Name);
+        	this.logger.log('PROJECT',this.getContext().getProject().Name);
+        	this.logger.log('USER', this.getContext().getUser().UserName);
         } 
     	
-    	//Add the select button 
+    	//Add the select button and initial instructions
     	this.down('#portfolio_item_box').add(
     	{
     		xtype: 'rallybutton',
@@ -63,6 +66,7 @@ Ext.define('CustomApp', {
     },
     
     _selectPortfolioItems: function(){
+    	//launches the dialog box to select the current portfolio item form 
     	var me = this;
     	Ext.create('Rally.ui.dialog.ChooserDialog',
     			{
@@ -70,10 +74,10 @@ Ext.define('CustomApp', {
     				autoShow: true,
     				title: 'Choose a Portfolio Item',
     				id: 'portfolio_item_chooser',
-    				multliple: false,
+    				multliple: false,  //user can only pick 1 item
     				modal: true,
     				scope:this,
-    				storeConfig: {
+    				storeConfig: {  //Need to get the current relationship, so retrieve additional fields
     					fetch: ['ObjectID','Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
     				},
     				gridConfig: {
@@ -98,16 +102,7 @@ Ext.define('CustomApp', {
     			});
     },
 
-    _formatRelativeData: function (data_items){
-    	var content = '';
-    	for (var i=0; i < data_items.length; i++){
-    		var id = data_items[i].get('ObjectID');
-    		//create the HTML Link 
-    		content += '<div id="' + id + '"><a  href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + '</a> - ' + data_items[i].get('Name') + '<br></div>';
-    	}
-    	this.logger.log('_formatRelativeData returned content:', content);
-    	return content;
-    },
+
     _getPredecessorFieldName: function(){
     	return this.getSetting('pi_predecessor_field_name');
     },
@@ -115,7 +110,7 @@ Ext.define('CustomApp', {
     	return this.getSetting('pi_successor_field_name');
     },
     _addRelativeSelectors: function(selected_records){
-		//This function clears out the existing portfolio item, resets the buttons
+		//This function clears out the existing portfolio item, resets the buttons and loads the relative grids
     	var me = this; 
     	
     	//Clear out all the existing grids, buttons, etc 
@@ -180,12 +175,15 @@ Ext.define('CustomApp', {
 	   	 		Deft.Promise.all(promises).then({
 	   	 					scope: this,
 	   	 					success: function(records) {
-	   	 						var record_data = [];
+	   	 						var record_data = null;
 	   	 						Ext.Array.each(records, function(record){
 	   	 							console.log('record' , record[0]);
 	   	 							if (record[0] != undefined){
+	   	 								if (record_data == null){
+	   	 									record_data = [];  //initialize this.  We can't do this above becuase it won't render an empty grid correctly if we pass in an empty array
+	   	 								}
 		   	 							record_data.push(
-			   	 								record[0]); //.getData()); //TODO This bothers me and makes me nervous...why is there a nested array returned?
+			   	 								record[0]); //.getData()); //THIS is why my removes weren't working;  
 	   	 							}
 	   	 						});
 	   	 						var store = this._createRelativeStore(record_data);
@@ -218,7 +216,6 @@ Ext.define('CustomApp', {
 					data: record_data,
 					pageSize: 25
 	 		});   	
-    	
     	return (relative_store);
     },
     _loadRelativeStore: function(object_id){
@@ -235,7 +232,6 @@ Ext.define('CustomApp', {
 				load: function(store, records){
 					console.log('load complete');
 					deferred.resolve(records);
-
 				}
 			}
 		});
@@ -243,28 +239,40 @@ Ext.define('CustomApp', {
  		return deferred.promise; 
         },
     
+    _formatRelativeData: function (data_items){
+        	var content = '';
+        	for (var i=0; i < data_items.length; i++){
+        		var id = data_items[i].get('ObjectID');
+        		//create the HTML Link 
+        		content += '<a id="' + id + '" href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') + '<br></a>';
+        	}
+        	this.logger.log('_formatRelativeData returned content:', content);
+        	return content;
+     },
+     
     _getObjectIdsFromRelativeHtml: function(html){
     	
 		this.logger.log('_getObjectIdsFromRelativeHtml - input html', html);
 		var el = document.createElement( 'div' );
     	el.innerHTML = html;
 
-		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
+		var relative_els = el.getElementsByTagName( 'a' ); // Live NodeList of your anchor elements
 
 		var object_ids = [];
-		if (relative_divs.length > 0){
-			for (var i=0; i<relative_divs.length; i++){
-				if (!isNaN(relative_divs[i].id))
+		if (relative_els.length > 0){
+			for (var i=0; i<relative_els.length; i++){
+				if (!isNaN(relative_els[i].id) && (relative_els[i].id.length>0))
 				{
-					object_ids.push(relative_divs[i].id);
+					console.log(relative_els[i].id);
+					object_ids.push(relative_els[i].id);
 				}
 				else
 				{
-					this.logger.log('WARNING: Invalid ObjectID in custom field.  Relative will not be loaded:', relative_divs[i].id );
+					this.logger.log('WARNING: Invalid ObjectID in custom field.  Relative will not be loaded:', relative_els[i].id );
 				}
     		}
 		}
-		this.logger.log('_getObjectIdsFromRelativeHtml - output ids', object_ids);
+		this.logger.log('_getObjectIdsFromRelativeHtml - output ids', object_ids, object_ids.length);
 		return object_ids;
     },
 
@@ -353,19 +361,6 @@ Ext.define('CustomApp', {
     	return pi_record.data.FormattedID + ' - ' + pi_record.data.Name;
     },
 
-    /*
-     * 
-     * Adding relatives to the selected portfolio item 
-     * 
-     */
-    _addRelatives: function(selected_records, grid_id){
-    	//This function assumes that selected_records is an array of data records of the portfolio items model
-
-		//combine selected records in the grid store
-    	var grid = this.down(grid_id);
-    	grid.getStore().add(selected_records);
-   	
-    },
     _chooseSuccessors: function(){
     	var me=this;
     	Ext.create('Rally.ui.dialog.ChooserDialog', {
@@ -378,15 +373,14 @@ Ext.define('CustomApp', {
 			},
     	    scope: this,
     	    listeners: {
-    	        artifactChosen: function(selectedRecords){
-    	        	this._addRelatives(selectedRecords,'#successor_grid');
-    	        	this._appendToRelativeItem(selectedRecords,this._getPredecessorFieldName(),this.selected_portfolio_item);
-    	        	this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName());
+    	        artifactChosen: function(selected_records) { 
+    	        	me._addSuccessors(selected_records);
     	        },
+
     	        scope: this
-    	    }	
-    	 });
-    },
+    	    }
+		});
+    }, 
     _choosePredecessors: function(){
     	var me=this;
     	Ext.create('Rally.ui.dialog.ChooserDialog', {
@@ -397,55 +391,55 @@ Ext.define('CustomApp', {
 			storeConfig: {
 				fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
 			},
-    	    listeners: {
-    	        artifactChosen: function(selectedRecord){
-    	        	this._addRelatives(selectedRecord,'#predecessor_grid');
-    	        	this._appendToRelativeItem(selectedRecord,this._getSuccessorFieldName(),this.selected_portfolio_item);
-    	        	this._updateCurrentItem(this.selected_portfolio_item,'#predecessor_grid', this._getPredecessorFieldName());
+			scope: this,
+			listeners: {
+    	        artifactChosen: function(selected_records){
+    	        	me._addPredecessors(selected_records);
     	        },
-    	        scope: this
+    	        scope:this
     	    }
     	 });
     },
     _appendToRelativeItem: function(selected_records, target_field_name, item_to_append){
-
+    	var deferred = Ext.create('Deft.Deferred');
     	var me = this;	
+    	var promises = [];
     	Ext.Array.each(selected_records, function(selected_record){
     		var new_content = me._addToHtml(item_to_append, selected_record.get(target_field_name));
-      		console.log('APPEND NEW DATA TO RELATIVE', selected_record.get('ObjectID'), selected_record.get('FormattedID'), new_content, target_field_name);
-            
-      		me._updateRelativeData(selected_record, target_field_name, new_content).then({
-            	scope:this,
-            	success: function(){
-            		me.logger.log('_appendToRelativeItem SUCCESSFUL');
-            	},
-            	failure: function(){
-            		me.logger.log('_appendToRelativeItem FAILED');
-            	}
-            });
-
-	 	});
+    		promises.push(me._updateRelativeData(selected_record, target_field_name, new_content));
+    	});
+		Deft.Promise.all(promises).then({
+	    	scope:this,
+	    	success: function(){
+	    		me.logger.log('_appendToRelativeItem SUCCESSFUL');
+	    		deferred.resolve();
+	    	},
+	    	failure: function(){
+	    		me.logger.log('_appendToRelativeItem FAILED');
+	    		deferred.reject();
+	    	}
+		});
+    	return deferred.promise;
     },		
     
     _addToHtml: function(item_to_add,html){
     	
     	var object_id_to_add = item_to_add.get('ObjectID');
-    	var el = document.createElement( 'span' );
+    	var el = document.createElement( 'div' );
     	el.innerHTML = html;
 
-		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
+		var relative_els = el.getElementsByTagName( 'a' ); // Live NodeList of your anchor elements
 
-		if (relative_divs.length > 0){
-			for (var i=0; i<relative_divs.length; i++){
-				if (!isNaN(relative_divs[i].id))
+		if (relative_els.length > 0){
+			for (var i=0; i<relative_els.length; i++){
+				if (!isNaN(relative_els[i].id))
 				{
-					if (relative_divs[i].id == object_id_to_add){
+					if (relative_els[i].id == object_id_to_add){
 						//don't add again, or maybe we want to remove and add again
 						return html;  
 					}
 				}
 			}
-
 		} 		
 		html += this._formatRelativeData([item_to_add]);
 		return html;
@@ -453,31 +447,40 @@ Ext.define('CustomApp', {
 
     _updateCurrentItem: function(target_item,grid_id, relative_field_name){
     	//Updates the relative data fields (as defined in the settings) per the state of the current grid (grid_id)
+    	var deferred = Ext.create('Deft.Deferred');
     	
         this.logger.log('_updateCurrentItem', target_item, grid_id, relative_field_name);
+        
+        //need to get existing content from item and make sure that we don't delete anything that is hidden
+        var current_html = target_item.get(relative_field_name);
+        console.log(current_html);
     	var relative_items = this.down(grid_id).getStore().data.items;
         var relative_content = this._formatRelativeData(relative_items);
         
         this._updateRelativeData(target_item, relative_field_name, relative_content).then({
+        	scope: this,
         	success: function(){
         		this.logger.log('_updateCurrentItem SUCCESSFUL');
+        		deferred.resolve();
         	},
         	failure: function(){
         		this.logger.log('_updateCurrentItem FAILED');
+        		deferred.reject();
         	}
         });
+        return deferred;
     },	 	
     
     _stripFromHtml: function(object_id_to_remove,html){
      	var el = document.createElement( 'div' );
     	el.innerHTML = html;
-		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
-		if (relative_divs.length > 0){
-			for (var i=0; i<relative_divs.length; i++){
-				if (!isNaN(relative_divs[i].id))
+		var relative_els = el.getElementsByTagName( 'a' ); 
+		if (relative_els.length > 0){
+			for (var i=0; i<relative_els.length; i++){
+				if (!isNaN(relative_els[i].id))
 				{
-					if (relative_divs[i].id == object_id_to_remove){
-						el.removeChild(relative_divs[i]);
+					if (relative_els[i].id == object_id_to_remove){
+						el.removeChild(relative_els[i]);
 					}
 				}
 			}
@@ -507,7 +510,7 @@ Ext.define('CustomApp', {
 				}
     		}
     	});
-    	return deferred.promise;
+    	return deferred;
     },
     
     
@@ -551,8 +554,6 @@ Ext.define('CustomApp', {
 	 						me.logger.log('_removeFromRelativeItem Relatives failed to save');
 	 						deferred.reject('Relatives failed to save');
 	 					}
-	 		}).always(function(){
-	 			console.log('Always remove relatives');
 	 		});
     	return deferred;
     },
@@ -568,6 +569,9 @@ Ext.define('CustomApp', {
     	
     	var selected_records = grid.selModel.getSelection();
     	if (selected_records && selected_records.length > 0 ){
+    	//	this._beginEdits(selected_records);
+
+    		
 	   		if (grid_id == '#successor_grid')
 	       	{
 	  		 		remove_field_from_relative = this._getPredecessorFieldName();
@@ -582,8 +586,17 @@ Ext.define('CustomApp', {
 	   			scope:this,
 	        	success: function() {
 	        		this.logger.log('Promise returned.  Portfolio item successors and predecessors updated successfully.');
+	            	//this._commitEdits(selected_records);
 	        		grid.getStore().remove(selected_records);
-	            	this._updateCurrentItem(this.selected_portfolio_item,grid_id, remove_field_from_me);
+	            	this._updateCurrentItem(this.selected_portfolio_item,grid_id, remove_field_from_me).then({
+	            		scope: this,
+	            		success: function(){
+	            			this.logger.log('Success updating current item.');
+	            		},
+	            		failure:function() {
+	            			this.logger.log('Failed to update current item. Portfolio Item was not updated.');
+	            		}
+	            	});
 	        	},
 	        	failure: function(){
 	        		this.logger.log('Failed to Remove Relatives. Portfolio Item was not updated.');
@@ -592,12 +605,73 @@ Ext.define('CustomApp', {
 
     	}
     },  
+    _beginEdits: function(selected_records){
+		Ext.Array.each(selected_records, function(selected_record){
+			selected_record.beginEdit();
+		});
+    },
+    _rollbackEdits: function(selected_records){
+		Ext.Array.each(selected_records, function(selected_record){
+			selected_record.cancelEdit();
+		});
+    },
+    _commitEdits: function(selected_records){
+		Ext.Array.each(selected_records, function(selected_record){
+			selected_record.endEdit(false,[this._getPredecessorFieldName(),this._getSuccessorFieldName()]);
+		});
+    },
     _removeSuccessors: function(){
     	this._removeRelatives('#successor_grid');
     },
     _removePredecessors: function(){
     	this._removeRelatives('#predecessor_grid');
     },
+    _addSuccessors: function(selected_records){
+    	var grid = this.down('#successor_grid');
+    	grid.getStore().add(selected_records);  
+    	this._appendToRelativeItem(selected_records,this._getSuccessorFieldName(),this.selected_portfolio_item).then({
+       		scope: this,
+       		success: function(){
+       			console.log('Move forward with item updates');
+       			this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName()).then({
+       	       		scope:this,
+       	       		success: function(){
+       	       			console.log('item updates successful, now we can commit all changes');
+       	       		},
+       	       		failure: function(){
+       	       			console.log('item updates failed.  we need to roll back all changes');
+       	       		}
+       	       	});
+       		},
+       		failure: function() {
+       			console.log ('Rollback changes');
+       		}
+       	});
+    	//this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName());
+    },
+    _addPredecessors: function(selected_records){
+    	var grid = this.down('#predecessor_grid');
+    	grid.getStore().add(selected_records);
+       	this._appendToRelativeItem(selected_records,this._getSuccessorFieldName(),this.selected_portfolio_item).then({
+       		scope: this,
+       		success: function(){
+       			console.log('Move forward with item updates');
+       	       	this._updateCurrentItem(this.selected_portfolio_item,'#predecessor_grid', this._getPredecessorFieldName()).then({
+       	       		scope: this,
+       	       		success: function(){
+       	       			console.log('item updates successful, now we can commit all changes');
+       	       		},
+       	       		failure: function(){
+       	       			console.log('item updates failed.  we need to roll back all changes');
+       	       		}
+       	       	});
+       		},
+       		failure: function() {
+       			console.log ('Rollback changes');
+       		}
+       	});
+    },
+    
 
  /*
   * 
@@ -630,7 +704,7 @@ getSettingsFields: function() {
         xtype: 'rallyfieldcombobox',
         model: 'PortfolioItem',
         fieldLabel: 'Portfolio Item Predecessor Field',
-        width: 300,
+  //      width: 300,
         labelWidth: 200,
         _isNotHidden: _chooseOnlyTextFields,
         value: this._getPredecessorFieldName(),
@@ -643,7 +717,7 @@ getSettingsFields: function() {
         model: 'PortfolioItem',
         fieldLabel: 'Portfolio Item Successor Field',
         _isNotHidden: _chooseOnlyTextFields,
-        width: 300,
+    //    width: 300,
         labelWidth: 200,
         value: this._getSuccessorFieldName(),
         //valueField: 'name',
@@ -659,8 +733,10 @@ _showExternalSettingsDialog: function(fields){
          draggable: true,
          width: 400,
          title: 'Settings',
+         scope: this,
          buttons: [{ 
             text: 'OK',
+
             handler: function(cmp){
                 var settings = {};
                 Ext.Array.each(fields,function(field){
@@ -681,25 +757,8 @@ _showExternalSettingsDialog: function(fields){
      });
      this.settings_dialog.show();
 }
-});//    
-/*
- * Override so that the settings box fits (shows the buttons)
- */
-//showSettings: function(options) {
-//    this._appSettings = Ext.create('Rally.app.AppSettings', {
-//        fields: this.getSettingsFields(),
-//        settings: this.getSettings(),
-//        defaultSettings: this.getDefaultSettings(),
-//        context: this.getContext(),
-//        settingsScope: this.settingsScope
-//    });
-//
-//    this._appSettings.on('cancel', this._hideSettings, this);
-//    this._appSettings.on('save', this._onSettingsSaved, this);
-//
-//    this.hide();
-//    this.up().add(this._appSettings);
-//
-//    return this._appSettings;
-//}
-//});
+});   
+
+
+
+
