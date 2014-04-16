@@ -3,11 +3,11 @@
 <head>
     <title>pi-dependency-textfield</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Apr 10 2014 15:20:24 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue Apr 15 2014 17:20:21 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Apr 10 2014 15:20:24 GMT-0600 (MDT)";
-        var CHECKSUM = 8303196183;
+        var APP_BUILD_DATE = "Tue Apr 15 2014 17:20:21 GMT-0600 (MDT)";
+        var CHECKSUM = 29318840092;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -151,33 +151,34 @@ Ext.define('CustomApp', {
           	[
           	    {
           	    	xtype: 'container', 
+          	    	style: {padding: '20px'},
           	    	itemId: 'predecessor_box', 
-          	    	layout: {type: 'vbox'},
-          	    	flex: 1
+         	    	flex: 1
+          	    	
           	    },
           	    {
           	    	xtype: 'container', 
           	    	itemId: 'successor_box', 
-          	    	layout: {type: 'vbox'},
-          	    	flex: 1
+          	    	style: {padding: '20px'},
+          	    	flex: 1,
           	    }       	       
           	]
           },
           {xtype:'container',itemId: 'save_cancel_box', layout: {type: 'hbox'}, style: {padding: '10px',margin: '10px'}}
          ],
-
-     selected_portfolio_item: null,  //Record for the selected PI
-     portfolio_item_predecessors: null, //Records for the selected PI Predecessors
-     portfolio_item_successors: null, //Records for the selected PI Successors
      config: {
     	defaultSettings: {
-    	    pi_predecessor_field_name: 'c_piPredecessor',
-    	    pi_successor_field_name: 'c_piSuccessor'   		
+    	    pi_predecessor_field_name: 'blah-p',
+    	    pi_successor_field_name: 'blah'   		
     	}
-       
     },
-
+    
     launch: function() {
+    	
+    	//Is the user authorized?  
+    	console.log(this.getContext().getUser());
+    	
+    	
     	
     	if (typeof(this.getAppId()) == 'undefined' ) {
             // not inside Rally
@@ -189,29 +190,44 @@ Ext.define('CustomApp', {
         }
     	
     	//Build the UI 
-    	var me = this;
-    	this.down('#portfolio_item_box').add(
+        this.down('#portfolio_item_box').add(
     	{
     		xtype: 'rallybutton',
+    		id: 'portfolio_item_box_select_button',
     		text: 'Select...',
+    		style: {margin: '5px'},
     		scope: this,
-    		handler: function(){
-    			me._selectPortfolioItems();
+    		handler: function()
+    		{
+    			this._selectPortfolioItems();
     		}
     	});
-	
     },
     
     _selectPortfolioItems: function(){
     	var me = this;
-
+    	
     	Ext.create('Rally.ui.dialog.ChooserDialog',
     			{
     				artifactTypes:['portfolioitem'],
     				autoShow: true,
     				title: 'Choose a Portfolio Item',
+    				id: 'portfolio_item_chooser',
     				multliple: false,
     				modal: true,
+    				scope:this,
+    				storeConfig: {
+    					fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+    				},
+    				gridConfig: {
+    					columns: {
+    						items: [{
+    							text: 'ID', dataIndex: 'FormattedID'
+    						},{
+    							text: 'Name', dataIndex: 'Name'
+    						}]
+    					}
+    				},
     				listeners: {
     					artifactChosen: function (selectedRecords){
     						if (selectedRecords == undefined)
@@ -219,83 +235,338 @@ Ext.define('CustomApp', {
     							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
     							return;
     							}
-    						me.selected_portfolio_item = selectedRecords;
-    						me._buildUIAfterPortfolioItemSelected(selectedRecords);
-
-
+    						
+    				    	//Clear out all the existing grids, buttons, etc 
+    						if (me.down('#portfolio_item_box_text')){
+        						me.down('#portfolio_item_box_text').destroy();
+    						}
+    				    	me.down('#predecessor_box').removeAll(true);
+    				    	me.down('#successor_box').removeAll(true);
+    				    	me.down('#save_cancel_box').removeAll(true);
+    				    	console.log('_selectPortfolioItems',selectedRecords);
+    				    	me.selected_portfolio_item = selectedRecords;
+    						me._addRelativeSelectors(selectedRecords);
     					}
-    				},
-    				scope: this
+    				}
     			}
     			);
-   			
-
     },
-    _buildUIAfterPortfolioItemSelected: function(selected_records){
+
+    _saveRelatives: function(){
+    	//This function saves the selected predecessors and successors to all items  
+
+    	//First, save the selected predecessors and successors to the current item
+
+        this._saveRelativeData(this.selected_portfolio_item, '#successor_grid',this._getSuccessorFieldName());
+        this._saveRelativeData(this.selected_portfolio_item, '#predecessor_grid',this._getPredecessorFieldName());
+        
+        //Next, save the current item to the other successors\predecessor items (bi-directional)
+        //TODO - TA59225
+    	
+    },
+    _saveRelativeData: function(target_item,grid_id, relative_field_name){
+        this.logger.log('_saveRelativeData', target_item, grid_id, relative_field_name);
+    	var relative_items = this.down(grid_id).getStore().data.items;
+        var relative_content = this._formatRelativeData(relative_items);
+        
+        target_item.set(relative_field_name, relative_content);
+        target_item.save();
+    },
+    _formatRelativeData: function (data_items){
+    	var content = '';
+    	console.log('_formatRelativeData DATA', data_items);
+    	for (var i=0; i < data_items.length; i++){
+    		var id = data_items[i].get('ObjectID');
+    		console.log('ID',id);
+    		//create the HTML Link 
+    		content += '<div id="' + id + '"><a  href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + '</a> - ' + data_items[i].get('Name') + '<br></div>';
+    		console.log('_formatRelativeData', content);
+    		
+    	}
+    	return content;
+    },
+    _getPredecessorFieldName: function(){
+    	return this.getSetting('pi_predecessor_field_name');
+    },
+    _getSuccessorFieldName: function(){
+    	return this.getSetting('pi_successor_field_name');
+    },
+    _addRelativeSelectors: function(selected_records){
 		//This function clears out the existing portfolio item, resets the buttons
+    	console.log('_addRelativeSelectors INPUT', selected_records);
+        
+
     	var me = this; 
-    	if (me.down('portfolio_item_id'))
-    		{
-    		me.down('portfolio_item_id').destroy();
-    		}
 
-
-    	me.down('#portfolio_item_box').add(
-		    	{
-		    		xtype: 'rallytextfield',
-		    		id: 'portfolio_item_id',
-		    		value: me._getPortfolioItemDisplayText(selected_records),
-		    	});
     	
-    	//Add buttons 
-    	
-    	me._addPredecessorSelector ();
-    	me._addSuccessorSelector ();
+        me.down('#portfolio_item_box').add(
+        		{
+        			xtype: 'rallytextfield',
+        			value: me._getPortfolioItemDisplayText(selected_records),
+        			id:'portfolio_item_box_text',
+        			style: {margin: '5px'}
+        		});
    	
+    	//Add buttons 
+        console.log('before _getRelativeStore');
+        this._getRelativeStore(selected_records, me._getPredecessorFieldName()).then({
+        		scope: this,
+        		success: function(store){
+        			var predecessor_store = store; 
+        	    	console.log('after predecessor_store call');
+        	    	me._addRelativeSelector('#predecessor_box',
+        	    								'predecessor_grid',
+        	    								me._choosePredecessors, 
+        	    								me._removePredecessors, 
+        	    								predecessor_store);
+        	    	console.log('after add prdecessor selector');
+        	    	this._getRelativeStore(selected_records, me._getSuccessorFieldName()).then(
+        	    			{
+        	    				success: function(store){
+        	    					console.log('get prdecessor selector success');
+        	    					var successor_store = store; 
+      	        	    	
+        	    					me._addRelativeSelector('#successor_box',
+        	        	    								'successor_grid',
+        	        	    								me._chooseSuccessors, 
+        	        	    								me._removeSuccessors, 
+        	        	    								successor_store);
+        	    					      	    					       	    					
+        	    					//me._addSaveCancelButtons();
+        	    				}
+        	    	});
+        		}
+        });
+//    	console.log('outside addRelativeSelectorCall');
+//    	me._addRelativeSelector('#successor_box',
+//    								'successor_grid',
+//    								this._chooseSuccessors, 
+//    								this._removeSuccessors, 
+//    								this._getRelativeStore(selected_records, this._getSuccessorFieldName()));
+//   	
     },
-    _addPredecessorSelector: function(){
+    _getRelativeStore: function(selected_record, relative_field_name){
+  	 	var deferred = Ext.create('Deft.Deferred');
     	var me = this;
-    	this.down('#predecessor_box').removeAll();
-    	//Add the label
-    	this.down('#predecessor_box').add({
-    		xtype: 'label',
-    		text: 'Predecessors'
-    	});
+    	var relative_content = selected_record.get(relative_field_name);	
+
+    	this.logger.log ('_getRelativeStore ', relative_field_name, relative_content);
+   	 	
+   	 	var relative_store = null; 
+   	 	var record_data = null;  //returns an empty store if there is no content 
+
+   	 	if (relative_content.length > 0){
+   	 		var object_ids = this._getObjectIdsFromRelativeHtml(relative_content);
+   	 		if (object_ids.length > 0){
+   	 		var promises = [];
+   	 		Ext.Array.each(object_ids, function(object_id){
+   	 			promises.push(me._loadRelativeStore(object_id));
+   	 		});
+   	 		Deft.Promise.all(promises).then(
+   	 				{
+   	 					scope: this,
+   	 					success: function(records) {
+   	 						console.log(records);
+   	 						
+   	 						record_data = [];
+   	 						Ext.Array.each(records, function(record){
+   	 							console.log('record',record[0].getData());
+   	 							
+   	 							record_data.push(
+   	 								record[0].getData());
+   	 						});
+   	 						console.log(record_data);
+   	 						relative_store = Ext.create('Rally.data.custom.Store', {
+		   	  					fetch: ['ObjectID', 'FormattedID', 'Name', this._getPredecessorFieldName(), this._getSuccessorFieldName()],
+		   	  					data: record_data,
+		   	  					pageSize: 10
+	   	 			 		});  
+	   	 			 		deferred.resolve(relative_store);
+  	 					},
+   	 					failure: function(error){
+   	 						this.logger.log('_getRelativeStore failed with error',error);
+   	 		   	 			relative_store = Ext.create('Rally.data.custom.Store', {
+   	 		   	 				fetch: ['ObjectID', 'FormattedID', 'Name', this._getPredecessorFieldName(), this._getSuccessorFieldName()],
+   	 		   	 				data: null,
+   	 		   	 				pageSize: 10
+   	 		   	 				});   	 
+
+   	 		   	 			deferred.resolve(relative_store);
+  	 					}
+   	 					
+   	 		});
+   	 	
+   	 		}
+   	 		else 
+   	 			{
+   	   	 		console.log ('invalid content');
+   	   	 		relative_store = Ext.create('Rally.data.custom.Store', {
+   	 					fetch: ['FormattedID', 'Name', this._getPredecessorFieldName(), this._getSuccessorFieldName()],
+   		  					data: null,
+   		  					pageSize: 10
+   				 		});   	 
+
+   	   	 		deferred.resolve(relative_store);
+   	 			}
+   	 	}
+   	 	else
+   	 		{
+   	 		console.log ('content length == 0');
+   	 		relative_store = Ext.create('Rally.data.custom.Store', {
+ 					fetch: ['FormattedID', 'Name', this._getPredecessorFieldName(), this._getSuccessorFieldName()],
+	  					data: null,
+	  					pageSize: 10
+			 		});   	 
+
+   	 		deferred.resolve(relative_store);
+   	 		}
+   	 	return deferred.promise;
+    },
+    
+    _loadRelativeStore: function(object_id){
+    	 var deferred = Ext.create('Deft.Deferred');
+         this.logger.log('_loadRelativeStore - input', object_id);
+    	 
+ 		Ext.create('Rally.data.wsapi.Store',{
+			model: 'PortfolioItem',
+			fetch: ['ObjectID','FormattedID','Name',this._getPredecessorFieldName(),this._getSuccessorFieldName()],
+			filters: {property: 'ObjectID', value:object_id},
+			autoLoad: true,
+			listeners: {
+				scope:this, 
+				load: function(store, records){
+					console.log('store.load callback loaded');
+					
+						deferred.resolve(records);
+
+				}
+			}
+		});
+ 		return deferred.promise; 
+        },
+    
+    _getObjectIdsFromRelativeHtml: function(html){
     	
-    	
-    	//Add the records (if they exist) 
+		this.logger.log('_getObjectIdsFromRelativeHtml - input html', html);
+		var el = document.createElement( 'div' );
+    	el.innerHTML = html;
+
+		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
+
+		var object_ids = [];
+		if (relative_divs.length > 0){
+			for (var i=0; i<relative_divs.length; i++){
+				if (!isNaN(relative_divs[i].id))
+				{
+					object_ids.push(relative_divs[i].id);
+				}
+				else
+				{
+					this.logger.log('WARNING: Invalid ObjectID in custom field.  Relative will not be loaded:', relative_divs[i].id );
+				}
+    		}
+		}
+		this.logger.log('_getObjectIdsFromRelativeHtml - output ids', object_ids);
+		return object_ids;
+    },
+    
+    
+
+
+    _addSaveCancelButtons: function(){
+    	var me = this;
+    	this.down('#save_cancel_box').add(
+    			{
+    				xtype:'rallybutton',
+    				text:'Save',
+    				id: 'save_cancel_box_save_button',
+    				scope:this,
+    				handler: me._saveRelatives
+    			});
+    },
+    /*
+     * 
+     * Add predecessor and successor grids, add buttons and save\cancel button 
+     * 
+     */
+    _addRelativeSelector: function(container_id, grid_id, add_handler_function, remove_handler_function, relative_store){
+    	var me = this;
+    	this.down(container_id).removeAll();
+     	
+    	//Add the grid 
+    	this._addRelativeGrid (container_id, relative_store,grid_id);
     	
     	
     	//Add the button
-    	this.down('#predecessor_box').add({
+    	this.down(container_id).add({
     			xtype: 'rallybutton',
     			text: '+Add',
-    			handler: function(){
-        			me._choosePredecessors();
-        		}
+    			id: container_id + '_add_button',
+        		style: {margin: '5px'},
+    			scope: this,
+    			handler: add_handler_function
+    	});
+    	console.log(container_id + '_remove_button');
+    	this.down(container_id).add({
+    		xtype:'rallybutton',
+    		text: 'Remove Selected',
+    		id: container_id + '_remove_button',
+    		style: {margin: '5px'},
+    		scope: this,
+    		listeners: {
+    			click: remove_handler_function,
+    			scope: this
+    		}//,
+    		//handler: remove_handler_function
     	});
 
     },
-    _addSuccessorSelector: function(){
-    	var me = this;
-    	this.down('#successor_box').removeAll();
+   
+    _addRelativeGrid: function(container_id, store, grid_id){
     	
-    	//Add the label
-    	this.down('#successor_box').add({
-    		xtype: 'label',
-    		text: 'Successors'
+    	var title = 'Successors';
+    	if (container_id == '#predecessor_box') {
+    		title = 'Predecessors';
+    	}
+    	
+    	this.down(container_id).add({
+    		xtype: 'rallygrid',
+    		title: title,
+    		id:grid_id,
+    		store: store,
+    		enableEditing: false,
+    		enableRanking: false,
+    		showRowActionsColumn: false,
+    		showPagingToolbar: false,
+    		selModel: {
+    			selType: 'checkboxmodel', 
+    			mode:'MULTI', 
+    			itemId: container_id + '_selmodel',
+    			listeners: {
+    				scope:this,
+    				selectionchange: function(selection_model, selected)
+    				{
+    					var remove_button_item_id = selection_model.itemId.replace('_selmodel','_remove_button');
+    					console.log (remove_button_item_id);
+    					this._setButtonDisabled(remove_button_item_id, (selected.length==0));
+    				}
+    			}
+    		},
+    		scope:this,
+    		columnCfgs: [
+    		             {
+    		            	 text: 'ID', dataIndex: 'FormattedID', flex:1
+    		             },
+    		             {
+    		            	 text: 'Name', dataIndex: 'Name', flex: 1
+    		             },
+    		             ]
     	});
 
-    	
-    	
-    	//Add the button
-    	this.down('#successor_box').add({
-    			xtype: 'rallybutton',
-    			text: '+Add',
-    			handler: function(){
-        			me._chooseSuccessors();
-        		}
-    	});
+    },
+    _setButtonDisabled: function(button_id, set_disabled){
+    	console.log(this);
+    	console.log(this.down(button_id));
     },
     _getPortfolioItemDisplayText: function(pi_record){
     	if (pi_record == null || pi_record == undefined){
@@ -303,98 +574,172 @@ Ext.define('CustomApp', {
     	}
     	return pi_record.data.FormattedID + ' - ' + pi_record.data.Name;
     },
-    _choosePredecessors: function(){
-    	var me=this;
-    	Ext.create('Rally.ui.dialog.ChooserDialog',
-    			{
-    				artifactTypes:['portfolioitem'],
-    				autoShow: true,
-    				title: 'Choose predecessor Portfolio Items',
-    			    multiple: true,
-    				listeners: {
-    					artifactChosen: function (selectedRecords){
-    						if (selectedRecords == undefined)
-    							{
-    							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
-    							return;
-    							}
-    						me._addPredecessors(selectedRecords);
-   					}
-    				},
-    				scope: this
-    			}
-    			);
+
+    /*
+     * 
+     * Adding relatives to the selected portfolio item 
+     * 
+     */
+    _addRelatives: function(selected_records, grid_id){
+    	//This function assumes that selected_records is an array of data records of the portfolio items model
+
+		//combine selected records in the grid store
+    	var grid = this.down(grid_id);
+    	grid.getStore().add(selected_records);
+   	
     },
     _chooseSuccessors: function(){
     	var me=this;
-    	Ext.create('Rally.ui.dialog.ChooserDialog',
-    			{
-    				artifactTypes:['portfolioitem'],
-    				autoShow: true,
-    				title: 'Choose Successor Portfolio Items',
-    			    multiple: true,
-    				listeners: {
-    					artifactChosen: function (selectedRecords){
-    						if (selectedRecords == undefined)
-    							{
-    							Ext.Msg.alert('Chooser', 'Please select a Portfolio Item');
-    							return;
-    							}
-    						me._addSuccessors(selectedRecords);
-    					}
-    				},
-    				scope: this
-    			}
-    			);
+    	Ext.create('Rally.ui.dialog.ChooserDialog', {
+    	    artifactTypes: ['portfolioitem'],
+    	    autoShow: true,
+    	    multiple: true,
+    	    title: 'Choose Successor Items',
+			storeConfig: {
+				fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+			},
+    	    scope: this,
+    	    listeners: {
+    	        artifactChosen: function(selectedRecords){
+    	        	this._addRelatives(selectedRecords,'#successor_grid');
+    	        	this._appendRelativeData(selectedRecords,this._getPredecessorFieldName(),this.selected_portfolio_item);
+    	        	this._saveRelativeData(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName());
+    	        },
+    	        scope: this
+    	    }	
+    	 });
     },
-    _addPredecessors: function(selected_records){
-    	//This function assumes that selected_records is an array of data records of the portfolio items model
-    	var me= this;
-    	console.log(selected_records);
-    	var predecessor_content = ''
-        	this.down('#predecessor_box').add({
-        		xtype: 'container',
-        		text: 'Predecessors'
-        	});
-		
-    		
-    		for (var i=0; i < selected_records.length; i++){
-    	   	 var predecessor_content = '<a href="' + Rally.nav.Manager.getDetailUrl(selected_records[i]) + '">' + me._getPortfolioItemDisplayText(selected_records[i]) + '</a><br>';
-    	   	 me.down('#predecessor_box').add ({
-    	   		 xtype: 'container',
-    	   		 html: predecessor_content
- 	   			 
-    	   	 });  
-    	   	 
-    	}
-    	
-
+    _choosePredecessors: function(){
+    	var me=this;
+    	Ext.create('Rally.ui.dialog.ChooserDialog', {
+    	    artifactTypes: ['portfolioitem'],
+    	    autoShow: true,
+    	    multiple: true,
+    	    title: 'Choose Predecessor Items',
+			storeConfig: {
+				fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+			},
+    	    listeners: {
+    	        artifactChosen: function(selectedRecord){
+    	        	this._addRelatives(selectedRecord,'#predecessor_grid');
+    	        	this._appendRelativeData(selectedRecord,this._getSuccessorFieldName(),this.selected_portfolio_item);
+    	        	this._saveRelativeData(this.selected_portfolio_item,'#predecessor_grid', this._getPredecessorFieldName());
+    	        },
+    	        scope: this
+    	    }
+    	 });
     },
+    _appendRelativeData: function(selected_records, target_field_name, item_to_append){
 
-    _addSuccessors: function(selected_records){
-    	//This function assumes that selected_records is an array of data records of the portfolio items model
-    	var me= this;
-    	console.log(selected_records);
-    	var successor_content = ''
-        	this.down('#successor_box').add({
-        		xtype: 'container',
-        		text: 'Successors'
-        	});
-		
-    		
-    		for (var i=0; i < selected_records.length; i++){
-    	   	 var predecessor_content = '<a id="' + selected_records[i].ObjectID + '" href="' + Rally.nav.Manager.getDetailUrl(selected_records[i]) + '">' + me._getPortfolioItemDisplayText(selected_records[i]) + '</a><br>';
-    	   	 me.down('#successor_box').add ({
-    	   		 xtype: 'container',
-    	   		 html: predecessor_content
- 	   			 
-    	   	 });  
-    	   	 
-    	}
-    	
-
-    },
+    	var me = this;	
+    	Ext.Array.each(selected_records, function(selected_record){
+	 		var new_content = me._addToRelativeHtml(item_to_append, selected_record.get(target_field_name));
+    		selected_record.set(target_field_name,new_content);
+    	 	selected_record.save();
+	 	});
+    },		
     
+    _addToRelativeHtml: function(item_to_add,html){
+    	
+    	var object_id_to_add = item_to_add.get('ObjectID');
+    	var el = document.createElement( 'div' );
+    	el.innerHTML = html;
+
+		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
+
+		if (relative_divs.length > 0){
+			for (var i=0; i<relative_divs.length; i++){
+				console.log(relative_divs[i].id);
+				if (!isNaN(relative_divs[i].id))
+				{
+					if (relative_divs[i].id == object_id_to_add){
+						//don't add again
+						return html;  
+					}
+				}
+			}
+
+		} 		
+		html += this._formatRelativeData([item_to_add]);
+		console.log('HTML AFTER', html  );
+		return html;
+    },
+	 		    	
+	_removeFromRelativeData: function(selected_records, remove_from_field, item_to_remove){
+    	
+    	var me = this;	
+        var object_id_to_remove = item_to_remove.get('ObjectID');
+    	Ext.Array.each(selected_records, function(selected_record){
+	 			var orig_content = selected_record.get(remove_from_field);
+	 			console.log('HTML BEFORE', orig_content);
+	 			new_content = me._removeFromRelativeHtml(object_id_to_remove, orig_content); 
+	 			selected_record.set(remove_from_field,new_content);
+	 			console.log('REMOVE FROM RELATIVE DATA', selected_record.get('ObjectID'), remove_from_field, new_content);
+	 			selected_record.save();
+	 		});
+    },
+    _removeFromRelativeHtml: function(object_id_to_remove,html){
+    	
+		var el = document.createElement( 'div' );
+    	el.innerHTML = html;
+
+		var relative_divs = el.getElementsByTagName( 'div' ); // Live NodeList of your anchor elements
+
+		if (relative_divs.length > 0){
+			for (var i=0; i<relative_divs.length; i++){
+				console.log(relative_divs[i].id);
+				if (!isNaN(relative_divs[i].id))
+				{
+					if (relative_divs[i].id == object_id_to_remove){
+						el.removeChild(relative_divs[i]);
+					}
+				}
+			}
+			html = el.innerHTML;
+		} 		
+		console.log('HTML AFTER', html);
+		return html;
+    },
+  	
+    /*
+     * 
+     * Removing relatives from the current portfolio item
+     * 
+     */
+    _removeRelatives: function(grid_id){
+    	var grid = this.down(grid_id);
+    	
+    	var selected_records = grid.selModel.getSelection();
+    	if (selected_records && selected_records.length > 0 ){
+        	var remove_field = '';
+    		if (grid_id == '#successor_grid')
+        	{
+        		 remove_field = this._getPredecessorFieldName();
+        	}
+        	else
+        	{
+        		 remove_field = this._getSuccessorFieldName();
+        	}
+        	this._removeFromRelativeData(selected_records, remove_field, this.selected_portfolio_item );
+        	grid.getStore().remove(selected_records);
+        	
+
+    	}
+
+    },  
+    _removeSuccessors: function(){
+    	
+    	this._removeRelatives('#successor_grid');
+    	this._saveRelativeData(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName());
+    },
+    _removePredecessors: function(){
+    	this._removeRelatives('#predecessor_grid');
+    	this._saveRelativeData(this.selected_portfolio_item,'#predecessor_grid', this._getPredecessorFieldName());
+    },
+
+//    _queryCompForSuccessors: function(component){
+//    	return (component.getItemId().search('successor_list_item')>=0);
+//    },
     
  /*
   * 
@@ -406,6 +751,7 @@ getSettingsFields: function() {
 
     var _chooseOnlyTextFields = function(field){
         var should_show_field = true;
+
         if ( field.hidden ) {
             should_show_field = false;
         }
@@ -417,6 +763,7 @@ getSettingsFields: function() {
         } else {
             should_show_field = false;
         }
+
         return should_show_field;
     };
 	
@@ -428,7 +775,8 @@ getSettingsFields: function() {
         width: 300,
         labelWidth: 200,
         _isNotHidden: _chooseOnlyTextFields,
-        value: this.getSetting('pi_predecessor_field_name'),
+        value: this._getPredecessorFieldName(),
+       //valueField: 'name',
         readyEvent: 'ready' //event fired to signify readiness
     },
     {
@@ -439,7 +787,8 @@ getSettingsFields: function() {
         _isNotHidden: _chooseOnlyTextFields,
         width: 300,
         labelWidth: 200,
-        value: this.getSetting('pi_successor_field_name'),
+        value: this._getSuccessorFieldName(),
+        //valueField: 'name',
         readyEvent: 'ready' //event fired to signify readiness
     }];
 },
@@ -457,6 +806,7 @@ _showExternalSettingsDialog: function(fields){
             handler: function(cmp){
                 var settings = {};
                 Ext.Array.each(fields,function(field){
+                	me.logger.log(field.name, '=',cmp.up('rallydialog').down('[name="' + field.name + '"]').getValue() );
                 	settings[field.name] = cmp.up('rallydialog').down('[name="' + field.name + '"]').getValue();
                 });
                 me.settings = settings;
@@ -470,32 +820,33 @@ _showExternalSettingsDialog: function(fields){
             {xtype:'container',itemId:'field_box', padding: 5, margin: 5}]
      });
      Ext.Array.each(fields,function(field){
+    	me.logger.log('Add: ', field.name, field.value); 
         me.settings_dialog.down('#field_box').add(field);
      });
      this.settings_dialog.show();
-},    
+}
+});//    
 /*
  * Override so that the settings box fits (shows the buttons)
  */
-showSettings: function(options) {
-    this._appSettings = Ext.create('Rally.app.AppSettings', {
-        fields: this.getSettingsFields(),
-        settings: this.getSettings(),
-        defaultSettings: this.getDefaultSettings(),
-        context: this.getContext(),
-        settingsScope: this.settingsScope
-    });
-    this.doLayout();
-
-    this._appSettings.on('cancel', this._hideSettings, this);
-    this._appSettings.on('save', this._onSettingsSaved, this);
-
-    this.hide();
-    this.up().add(this._appSettings);
-
-    return this._appSettings;
-}
-});
+//showSettings: function(options) {
+//    this._appSettings = Ext.create('Rally.app.AppSettings', {
+//        fields: this.getSettingsFields(),
+//        settings: this.getSettings(),
+//        defaultSettings: this.getDefaultSettings(),
+//        context: this.getContext(),
+//        settingsScope: this.settingsScope
+//    });
+//
+//    this._appSettings.on('cancel', this._hideSettings, this);
+//    this._appSettings.on('save', this._onSettingsSaved, this);
+//
+//    this.hide();
+//    this.up().add(this._appSettings);
+//
+//    return this._appSettings;
+//}
+//});
 
             
                Rally.launchApp('CustomApp', {
