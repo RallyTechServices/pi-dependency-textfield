@@ -177,7 +177,6 @@ Ext.define('CustomApp', {
 	   	 					success: function(records) {
 	   	 						var record_data = null;
 	   	 						Ext.Array.each(records, function(record){
-	   	 							console.log('record' , record[0]);
 	   	 							if (record[0] != undefined){
 	   	 								if (record_data == null){
 	   	 									record_data = [];  //initialize this.  We can't do this above becuase it won't render an empty grid correctly if we pass in an empty array
@@ -225,12 +224,12 @@ Ext.define('CustomApp', {
  		Ext.create('Rally.data.wsapi.Store',{
 			model: 'PortfolioItem',
 			fetch: ['ObjectID','FormattedID','Name',this._getPredecessorFieldName(),this._getSuccessorFieldName()],
+			context: {project:null},  //load relatives even if they are outside the current project context
 			filters: {property: 'ObjectID', value:object_id},
 			autoLoad: true,
 			listeners: {
 				scope:this, 
 				load: function(store, records){
-					console.log('load complete');
 					deferred.resolve(records);
 				}
 			}
@@ -263,7 +262,7 @@ Ext.define('CustomApp', {
 			for (var i=0; i<relative_els.length; i++){
 				if (!isNaN(relative_els[i].id) && (relative_els[i].id.length>0))
 				{
-					console.log(relative_els[i].id);
+
 					object_ids.push(relative_els[i].id);
 				}
 				else
@@ -453,7 +452,6 @@ Ext.define('CustomApp', {
         
         //need to get existing content from item and make sure that we don't delete anything that is hidden
         var current_html = target_item.get(relative_field_name);
-        console.log(current_html);
     	var relative_items = this.down(grid_id).getStore().data.items;
         var relative_content = this._formatRelativeData(relative_items);
         
@@ -498,7 +496,6 @@ Ext.define('CustomApp', {
     	target_item.save({
     		scope: this,
     		callback: function(record, operation){
-    			console.log('OPERATION',operation);
     			if (operation.wasSuccessful())
     			{
 					this.logger.log('Update Successful', target_item.get('ObjectID'), target_field, update_content);
@@ -548,7 +545,6 @@ Ext.define('CustomApp', {
 	 		Deft.Promise.all(promises).then({
 	 					scope: this,
 	 					success: function(){
-	 						console.log('_removeFromRelativeItem Return Success');
 	 						deferred.resolve();
 	 					},
 	 					failure: function(){
