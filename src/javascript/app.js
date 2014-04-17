@@ -498,6 +498,7 @@ Ext.define('CustomApp', {
     	target_item.save({
     		scope: this,
     		callback: function(record, operation){
+    			console.log('OPERATION',operation);
     			if (operation.wasSuccessful())
     			{
 					this.logger.log('Update Successful', target_item.get('ObjectID'), target_field, update_content);
@@ -506,7 +507,7 @@ Ext.define('CustomApp', {
 				else 
 				{
 					this.logger.log('Update Failed', target_item.get('ObjectID'), target_field, update_content);
-					deferred.reject();
+					deferred.reject(operation.Errors);
 				}
     		}
     	});
@@ -565,23 +566,22 @@ Ext.define('CustomApp', {
      * 
      */
     _removeRelatives: function(grid_id){
+    	var me = this;
     	var grid = this.down(grid_id);
     	
     	var selected_records = grid.selModel.getSelection();
     	if (selected_records && selected_records.length > 0 ){
-    	//	this._beginEdits(selected_records);
-
-    		
 	   		if (grid_id == '#successor_grid')
 	       	{
 	  		 		remove_field_from_relative = this._getPredecessorFieldName();
 	   		 		remove_field_from_me = this._getSuccessorFieldName();
-		 	}
+	       	}
 	       	else
 	       	{
 	   		       remove_field_from_relative = this._getSuccessorFieldName();     
 	   		       remove_field_from_me = this._getPredecessorFieldName();
 	       	}
+		 	var original_content = this._preserveOriginalContent(selected_records,remove_field_from_relative);	
 	   		this._removeFromSelectedRelativeItems(selected_records, remove_field_from_relative, this.selected_portfolio_item ).then({
 	   			scope:this,
 	        	success: function() {
@@ -594,32 +594,24 @@ Ext.define('CustomApp', {
 	            			this.logger.log('Success updating current item.');
 	            		},
 	            		failure:function() {
-	            			this.logger.log('Failed to update current item. Portfolio Item was not updated.');
+	    	       			var msg = 'Update of current item failed.  Rolling back changes to related items.';
+    	  	       			alert(msg);
+	       	       			this.logger.log(msg);
+	    	        		this._restoreOriginalContent(selected_records,remove_field_from_relative,original_content );
 	            		}
 	            	});
 	        	},
 	        	failure: function(){
-	        		this.logger.log('Failed to Remove Relatives. Portfolio Item was not updated.');
+	       			var msg = 'Removal of related items failed.  Rolling back changes to related items.';
+   	       			alert(msg);
+   	       			this.logger.log(msg);
+	        		this._restoreOriginalContent(selected_records,remove_field_from_relative,original_content );
 	        	}
 	   		});
 
     	}
     },  
-    _beginEdits: function(selected_records){
-		Ext.Array.each(selected_records, function(selected_record){
-			selected_record.beginEdit();
-		});
-    },
-    _rollbackEdits: function(selected_records){
-		Ext.Array.each(selected_records, function(selected_record){
-			selected_record.cancelEdit();
-		});
-    },
-    _commitEdits: function(selected_records){
-		Ext.Array.each(selected_records, function(selected_record){
-			selected_record.endEdit(false,[this._getPredecessorFieldName(),this._getSuccessorFieldName()]);
-		});
-    },
+
     _removeSuccessors: function(){
     	this._removeRelatives('#successor_grid');
     },
@@ -628,50 +620,99 @@ Ext.define('CustomApp', {
     },
     _addSuccessors: function(selected_records){
     	var grid = this.down('#successor_grid');
+       	//since we are adding predecessors, we only need to preserve predecessor fields for the selected items
+    	var original_content = this._preserveOriginalContent(selected_records, this._getPredecessorFieldName());
+    	
     	grid.getStore().add(selected_records);  
+
     	this._appendToRelativeItem(selected_records,this._getSuccessorFieldName(),this.selected_portfolio_item).then({
        		scope: this,
        		success: function(){
-       			console.log('Move forward with item updates');
        			this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName()).then({
        	       		scope:this,
        	       		success: function(){
-       	       			console.log('item updates successful, now we can commit all changes');
+       	       			this.logger.log('Updates successful.');
        	       		},
        	       		failure: function(){
-       	       			console.log('item updates failed.  we need to roll back all changes');
+       	       			var msg = 'Update of current portfolio item failed.  Rolling back changes to related items.';
+       	       			alert(msg);
+       	       			this.logger.log(msg);
+       	      		    this._restoreOriginalContent(selected_records, this._getPredecessorFieldName(), original_content);
        	       		}
        	       	});
        		},
        		failure: function() {
-       			console.log ('Rollback changes');
+	       			var msg = 'Update of related items failed.  Rolling back changes to related items.';
+   	       			alert(msg);
+   	       			this.logger.log(msg);
+   	       			this._restoreOriginalContent(selected_records, this._getPredecessorFieldName(), original_content);
        		}
        	});
     	//this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName());
     },
     _addPredecessors: function(selected_records){
     	var grid = this.down('#predecessor_grid');
+    	
+    	//since we are adding predecessors, we only need to preserve successor fields for the selected items
+    	var original_content = this._preserveOriginalContent(selected_records, this._getSuccessorFieldName());
+    	
     	grid.getStore().add(selected_records);
        	this._appendToRelativeItem(selected_records,this._getSuccessorFieldName(),this.selected_portfolio_item).then({
        		scope: this,
        		success: function(){
-       			console.log('Move forward with item updates');
        	       	this._updateCurrentItem(this.selected_portfolio_item,'#predecessor_grid', this._getPredecessorFieldName()).then({
        	       		scope: this,
        	       		success: function(){
-       	       			console.log('item updates successful, now we can commit all changes');
+       	       			this.logger.log('Updates successful.');
        	       		},
        	       		failure: function(){
-       	       			console.log('item updates failed.  we need to roll back all changes');
+       	       			var msg = 'Update of current portfolio item failed.  Rolling back changes to related items.';
+       	       			alert(msg);
+       	       			this.logger.log(msg);
+       	       			this._restoreOriginalContent(selected_records, this._getSuccessorFieldName(), original_content);
        	       		}
        	       	});
        		},
        		failure: function() {
-       			console.log ('Rollback changes');
+       			var msg = 'Update of related items failed.  Rolling back changes to related items.';
+       			alert(msg);
+       			this.logger.log(msg);
+       	    	this._restoreOriginalContent(selected_records, this._getSuccessorFieldName(), original_content);
        		}
        	});
     },
-    
+    _preserveOriginalContent: function(selected_records, field_to_preserve){
+    	//For rollback purposes, store the original field values for relatives
+    	//I don't think this is needed for the current item since it is the last in the chain.  If it 
+    	//fails to update, we don't need to roll it back.  
+
+    	var original_content = [];  
+    	Ext.Array.each(selected_records, function(selected_record){
+    		var key =   selected_record.get('ObjectID');
+    		var value = selected_record.get(field_to_preserve);
+    		original_content[key]=value;
+    	  });
+    	return original_content; 
+    },
+
+    _restoreOriginalContent: function(selected_records, field_to_restore, original_content){
+    	
+    	Ext.Array.each(selected_records, function(selected_record){
+    		var id = selected_record.get('ObjectID');
+    		if (selected_record.get(field_to_restore) != original_content[id]){ //only restore if it changed;  
+    			//Since we can determine whether it changed without a trip to the store, we might as well
+	    		this._updateRelativeData(selected_record, field_to_restore, original_content[id]).then({
+	    				success: function(){
+	    					//do nothing, we're just glad the rollback worked
+	    				},
+	    				failure: function() {
+	    					//keep going, this could have failed due to permissions error, etch.  We are most concerned with restoring
+	    					//what was originally there
+	    				}
+	    		});
+    		}
+    	});
+    },
 
  /*
   * 
