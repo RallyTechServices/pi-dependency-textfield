@@ -625,7 +625,7 @@ Ext.define('CustomApp', {
     	
     	grid.getStore().add(selected_records);  
 
-    	this._appendToRelativeItem(selected_records,this._getSuccessorFieldName(),this.selected_portfolio_item).then({
+    	this._appendToRelativeItem(selected_records,this._getPredecessorFieldName(),this.selected_portfolio_item).then({
        		scope: this,
        		success: function(){
        			this._updateCurrentItem(this.selected_portfolio_item,'#successor_grid', this._getSuccessorFieldName()).then({
