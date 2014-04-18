@@ -19,7 +19,7 @@ To use:
 <li>If a user removes the linkages from a portfolio item itself outside of the app (in the portfolio item window), the linkage will not be automatically removed from the related item.  
 </ul>
 
-View the <a href="https://github.com/kcorkan/pi-dependency-textfield/blob/master/pi-dependency-textfield-demo.swf">pi-dependency-textfield-demo.swf</a> video for a demonstration.  
+View the <a href="http://www.screencast.com/t/EMkyNnobZM">pi-dependency-textfield-demo</a> video for a demonstration.  
 
 ## Development Notes
 
