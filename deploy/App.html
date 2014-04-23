@@ -3,11 +3,11 @@
 <head>
     <title>pi-dependency-textfield</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Apr 17 2014 11:38:34 GMT-0700 (PDT) -->
+    <!--  Build Date: Wed Apr 23 2014 13:46:09 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Apr 17 2014 11:38:34 GMT-0700 (PDT)";
-        var CHECKSUM = 51943903325;
+        var APP_BUILD_DATE = "Wed Apr 23 2014 13:46:09 GMT-0600 (MDT)";
+        var CHECKSUM = 53151589286;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -517,8 +517,11 @@ Ext.define('CustomApp', {
             autoShow: true,
             multiple: true,
             title: 'Choose Successor Items',
+            scope: this,
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
+                
             },
             scope: this,
             listeners: {
@@ -530,6 +533,9 @@ Ext.define('CustomApp', {
             }
         });
     }, 
+    _filterSelectedPortfolioItem: function(item){
+        return item.get('ObjectID') != me.selected_portfolio_item.get('ObjectID'); 
+    },
     _choosePredecessors: function(){
         var me=this;
         Ext.create('Rally.ui.dialog.ChooserDialog', {
@@ -538,7 +544,8 @@ Ext.define('CustomApp', {
             multiple: true,
             title: 'Choose Predecessor Items',
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
             },
             scope: this,
             listeners: {
