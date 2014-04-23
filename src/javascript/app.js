@@ -255,12 +255,19 @@ Ext.define('CustomApp', {
             for (var i=0; i < data_items.length; i++){
                 var id = data_items[i].get('ObjectID');
                 //create the HTML Link 
-                content += '<a id="' + id + '" href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') + '<br></a>';
+                var el = document.createElement('a');
+                el.id = id ;
+                el.href = Rally.nav.Manager.getDetailUrl(data_items[i]);
+                el.innerHTML = data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') ;
+                el.innerHTML = el.innerHTML + '<br>';
+                content += el.outerHTML;
+
+//                content += '<a id="' + id + '" href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') + '<br></a>';
             }
             this.logger.log('_formatRelativeData returned content:', content);
             return content;
      },
-     
+
     _getObjectIdsFromRelativeHtml: function(html){
         
         this.logger.log('_getObjectIdsFromRelativeHtml - input html', html);
@@ -377,8 +384,11 @@ Ext.define('CustomApp', {
             autoShow: true,
             multiple: true,
             title: 'Choose Successor Items',
+            scope: this,
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
+                
             },
             scope: this,
             listeners: {
@@ -398,7 +408,8 @@ Ext.define('CustomApp', {
             multiple: true,
             title: 'Choose Predecessor Items',
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
             },
             scope: this,
             listeners: {
