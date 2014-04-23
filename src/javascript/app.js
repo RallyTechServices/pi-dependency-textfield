@@ -393,9 +393,6 @@ Ext.define('CustomApp', {
             }
         });
     }, 
-    _filterSelectedPortfolioItem: function(item){
-        return item.get('ObjectID') != me.selected_portfolio_item.get('ObjectID'); 
-    },
     _choosePredecessors: function(){
         var me=this;
         Ext.create('Rally.ui.dialog.ChooserDialog', {
