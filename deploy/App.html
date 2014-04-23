@@ -3,11 +3,11 @@
 <head>
     <title>pi-dependency-textfield</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Apr 23 2014 14:01:04 GMT-0600 (MDT) -->
+    <!--  Build Date: Wed Apr 23 2014 15:52:16 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Apr 23 2014 14:01:04 GMT-0600 (MDT)";
-        var CHECKSUM = 52728043251;
+        var APP_BUILD_DATE = "Wed Apr 23 2014 15:52:16 GMT-0600 (MDT)";
+        var CHECKSUM = 53686675987;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -395,12 +395,19 @@ Ext.define('CustomApp', {
             for (var i=0; i < data_items.length; i++){
                 var id = data_items[i].get('ObjectID');
                 //create the HTML Link 
-                content += '<a id="' + id + '" href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') + '<br></a>';
+                var el = document.createElement('a');
+                el.id = id ;
+                el.href = Rally.nav.Manager.getDetailUrl(data_items[i]);
+                el.innerHTML = data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') ;
+                el.innerHTML = el.innerHTML + '<br>';
+                content += el.outerHTML;
+
+//                content += '<a id="' + id + '" href="' + Rally.nav.Manager.getDetailUrl(data_items[i]) + '">' + data_items[i].get('FormattedID') + ' - ' + data_items[i].get('Name') + '<br></a>';
             }
             this.logger.log('_formatRelativeData returned content:', content);
             return content;
      },
-     
+
     _getObjectIdsFromRelativeHtml: function(html){
         
         this.logger.log('_getObjectIdsFromRelativeHtml - input html', html);
