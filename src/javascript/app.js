@@ -377,8 +377,11 @@ Ext.define('CustomApp', {
             autoShow: true,
             multiple: true,
             title: 'Choose Successor Items',
+            scope: this,
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
+                
             },
             scope: this,
             listeners: {
@@ -390,6 +393,9 @@ Ext.define('CustomApp', {
             }
         });
     }, 
+    _filterSelectedPortfolioItem: function(item){
+        return item.get('ObjectID') != me.selected_portfolio_item.get('ObjectID'); 
+    },
     _choosePredecessors: function(){
         var me=this;
         Ext.create('Rally.ui.dialog.ChooserDialog', {
@@ -398,7 +404,8 @@ Ext.define('CustomApp', {
             multiple: true,
             title: 'Choose Predecessor Items',
             storeConfig: {
-                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()]
+                fetch: ['Name', 'FormattedID', me._getPredecessorFieldName(), me._getSuccessorFieldName()],
+                filters: [{property: 'ObjectID', operator: '!=', value:me.selected_portfolio_item.get('ObjectID')}]
             },
             scope: this,
             listeners: {
