@@ -286,7 +286,11 @@ Ext.define('CustomApp', {
                 }
                 else
                 {
-                    this.logger.log('WARNING: Invalid ObjectID in custom field.  Relative will not be loaded:', relative_els[i].id );
+                    //parse el.href
+                    var href = relative_els[i].href;
+                    var obj_id = href.split("/").slice(-1)[0];
+                    object_ids.push(obj_id);
+                    //this.logger.log('WARNING: Invalid ObjectID in custom field.  Relative will not be loaded:', relative_els[i].id );
                 }
             }
         }
@@ -335,7 +339,7 @@ Ext.define('CustomApp', {
         if (container_id == '#predecessor_box') {
             title = 'Predecessors';
         }
-        
+        this.logger.log('_addRelativeGrid',store);
         this.down(container_id).add({
             xtype: 'rallygrid',
             title: title,
